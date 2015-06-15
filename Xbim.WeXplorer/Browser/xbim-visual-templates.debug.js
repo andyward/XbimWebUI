@@ -42,7 +42,8 @@
 if (attributes && attributes.length > 0) {\
     var psets = [];\
     for(var i = 0; i < attributes.length; i++){\
-        var attr = attributes[i]; var pset = attr.propertySet; if (pset) {if(psets.indexOf(pset) == -1){psets.push(pset);}}\
+        var attr = attributes[i]; if (!attr.propertySet) attr.propertySet = "General";\
+        var pset = attr.propertySet; if (pset) {if(psets.indexOf(pset) == -1){psets.push(pset);}}\
     }\
 %>\
     <% for (var p in psets) { var psetName = psets[p]; var pset = attributes.filter(function(e){ return e.propertySet == psetName;});\
@@ -58,9 +59,9 @@ if (attributes && attributes.length > 0) {\
 <%}%>',
         entity: '<span class="xbim-entity" title="<%=typeof(description) != "undefined" ? description : ""%>"> <%= name? name: (function f() { return type.charAt(0).toUpperCase() + type.slice(1); })() %> </span>',
         contact:
-'<% var nameA = properties.filter(function(e){return e.id == "ContactGivenName";})[0]; \
-var surnameA = properties.filter(function(e){return e.id == "ContactFamilyName";})[0]; \
-var emailA = properties.filter(function(e){return e.id == "ContactEmail";})[0]; \
+'<% var nameA = properties.filter(function(e){return e.id == "ContactGivenName";})[0] || properties.filter(function(e){return e.id == "GivenName";})[0]; \
+var surnameA = properties.filter(function(e){return e.id == "ContactFamilyName";})[0] || properties.filter(function(e){return e.id == "FamilyName";})[0]; \
+var emailA = properties.filter(function(e){return e.id == "ContactEmail";})[0] || properties.filter(function(e){return e.id == "Email";})[0]; \
 var name = nameA ? nameA.value : "";\
 var surname = surnameA ? surnameA.value : "";\
 var email = emailA ? emailA.value : ""; %>\

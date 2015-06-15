@@ -26,49 +26,57 @@ function xModelGeometry() {
     this.productMap = [];
 }
 
+xModelGeometry.prototype.getProductMap = function (ID) {
+    for (var i = 0; i < this.productMap.length; i++) {
+        var map = this.productMap[i];
+        if (map.productID === ID) return map;
+    }
+    return null;
+};
+
 xModelGeometry.prototype.parse = function (binReader) {
     var br = binReader;
-    var magicNumber = br.read(br.INT32);
+    var magicNumber = br.readInt32();
     if (magicNumber != 94132117) throw 'Magic number mismatch.';
-    var version = br.read(br.BYTE);
-    var numShapes = br.read(br.INT32);
-    var numVertices = br.read(br.INT32);
-    var numTriangles = br.read(br.INT32);
-    var numMatrices = br.read(br.INT32);
-    var numProducts = br.read(br.INT32);
-    var numStyles = br.read(br.INT32);
-    this.meter = br.read(br.FLOAT32);
-    var numRegions = br.read(br.INT16);
+    var version = br.readByte();
+    var numShapes = br.readInt32();
+    var numVertices = br.readInt32();
+    var numTriangles = br.readInt32();
+    var numMatrices = br.readInt32();;
+    var numProducts = br.readInt32();;
+    var numStyles = br.readInt32();;
+    this.meter = br.readFloat32();;
+    var numRegions = br.readInt16();
 
 
 
     //set size of arrays to be square usable for texture data
     //TODO: reflect support for floating point textures
-    var square = function (type, count) {
-        if (typeof (type) == 'undefined' || typeof (count) == 'undefined') {
+    var square = function (arity, count) {
+        if (typeof (arity) == 'undefined' || typeof (count) == 'undefined') {
             throw 'Wrong arguments';
         }
         if (count == 0) return 0;
-        var byteLength = count * type.arity;
+        var byteLength = count * arity;
         var imgSide = Math.ceil(Math.sqrt(byteLength / 4));
         //clamp to arity
-        while ((imgSide * 4) % type.arity != 0) {
+        while ((imgSide * 4) % arity != 0) {
             imgSide++
         }
-        var result = imgSide * imgSide * 4 / type.arity;
+        var result = imgSide * imgSide * 4 / arity;
         return result;
     };
 
     //create target buffers of correct size (avoid reallocation of memory)
-    this.vertices = new Float32Array(square(br.FLOAT32, numVertices * 3));
+    this.vertices = new Float32Array(square(4, numVertices * 3));
     this.normals = new Uint8Array(numTriangles * 6);
     this.indices = new Float32Array(numTriangles * 3);
     this.styleIndices = new Uint16Array(numTriangles * 3);
-    this.styles = new Uint8Array(square(br.BYTE, numStyles * 4));
+    this.styles = new Uint8Array(square(1, numStyles * 4));
     this.products = new Float32Array(numTriangles * 3);
     this.states = new Uint8Array(numTriangles * 3 * 2); //place for state and restyling
     this.transformations = new Float32Array(numTriangles * 3);
-    this.matrices = new Float32Array(square(br.FLOAT32, numMatrices * 16));
+    this.matrices = new Float32Array(square(4, numMatrices * 16));
     this.productMap = new Array(numProducts);
     this.regions = new Array(numRegions);
 
@@ -84,27 +92,34 @@ xModelGeometry.prototype.parse = function (binReader) {
 
     for (var i = 0; i < numRegions; i++) {
         this.regions[i] = {
-            population: br.read(br.INT32),
-            centre: br.read(br.FLOAT32, 3),
-            bbox: br.read(br.FLOAT32, 6)
+            population: br.readInt32(),
+            centre: br.readFloat32(3),
+            bbox: br.readFloat32(6)
         }
     }
 
 
     var styleMap = [];
+    styleMap.getStyle = function(id) {
+        for (var i = 0; i < this.length; i++) {
+            var item = this[i];
+            if (item.id == id) return item;
+        }
+        return null;
+    };
     for (var iStyle = 0; iStyle < numStyles; iStyle++) {
-        var styleId = br.read(br.INT32);
-        var R = br.read(br.FLOAT32) * 255;
-        var G = br.read(br.FLOAT32) * 255;
-        var B = br.read(br.FLOAT32) * 255;
-        var A = br.read(br.FLOAT32) * 255;
+        var styleId = br.readInt32();
+        var R = br.readFloat32() * 255;
+        var G = br.readFloat32() * 255;
+        var B = br.readFloat32() * 255;
+        var A = br.readFloat32() * 255;
         this.styles.set([R, G, B, A], iStyle * 4);
         styleMap.push({ id: styleId, index: iStyle, transparent: A < 254 });
     }
     for (var i = 0; i < numProducts ; i++) {
-        var productLabel = br.read(br.INT32);
-        var prodType = br.read(br.INT16);
-        var bBox = br.read(br.FLOAT32, 6);
+        var productLabel = br.readInt32();
+        var prodType = br.readInt16();
+        var bBox = br.readFloat32(6);
 
         var map = {
             productID: productLabel,
@@ -117,23 +132,23 @@ xModelGeometry.prototype.parse = function (binReader) {
 
     for (var iShape = 0; iShape < numShapes; iShape++) {
 
-        var repetition = br.read(br.INT32);
+        var repetition = br.readInt32();
         var shapeList = [];
         for (var iProduct = 0; iProduct < repetition; iProduct++) {
-            var prodLabel = br.read(br.INT32);
-            var instanceTypeId = br.read(br.INT16);
-            var instanceLabel = br.read(br.INT32);
-            var styleId = br.read(br.INT32);
+            var prodLabel = br.readInt32();
+            var instanceTypeId = br.readInt16();
+            var instanceLabel = br.readInt32();
+            var styleId = br.readInt32();
             var transformation = null;
 
             if (repetition > 1) {
-                transformation = br.read(br.MATRIX4x4);
+                transformation = br.readMatrix4x4();
                 this.matrices.set(transformation, iMatrix);
                 iMatrix += 16;
             }
 
-            var styleItem = styleMap.filter(function (st) { return st.id == styleId }).pop();
-            if (!styleItem)
+            var styleItem = styleMap.getStyle(styleId);
+            if (styleItem === null)
                 throw 'Style index not found.';
 
             shapeList.push({
@@ -164,10 +179,15 @@ xModelGeometry.prototype.parse = function (binReader) {
             }
 
             var begin = iIndex;
-            var map = this.productMap.filter(function (m) { return m.productID == shape.pLabel }).pop();
-            if (typeof (map) == 'undefined') throw "Product hasn't been defined before.";
+            var map = this.getProductMap(shape.pLabel);
+            if (map === null) throw "Product hasn't been defined before.";
 
             this.normals.set(shapeGeom.normals, iIndex * 2);
+
+            //switch spaces and openings off by default 
+            var state = map.type == typeEnum.IFCSPACE || map.type == typeEnum.IFCOPENINGELEMENT ?
+                stateEnum.HIDDEN :
+                0xFF; //0xFF is for the default state
 
             //fix indices to right absolute position. It is relative to the shape.
             for (var i = 0; i < shapeGeom.indices.length; i++) {
@@ -175,11 +195,7 @@ xModelGeometry.prototype.parse = function (binReader) {
                 this.products[iIndex] = shape.pLabel;
                 this.styleIndices[iIndex] = shape.style;
                 this.transformations[iIndex] = shape.transform;
-                //switch spaces and openings off by default 
-                if (map.type == typeEnum.IFCSPACE || map.type == typeEnum.IFCOPENINGELEMENT) {
-                    this.states[2 * iIndex] = stateEnum.HIDDEN;
-                }
-                else this.states[2 * iIndex] = 0xFF; //default state
+                this.states[2 * iIndex] = state; //set state
                 this.states[2 * iIndex + 1] = 0xFF; //default style
 
                 iIndex++;

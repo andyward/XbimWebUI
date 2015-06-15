@@ -150,7 +150,11 @@ xModelHandle.prototype.drawProduct = function (ID) {
 };
 
 xModelHandle.prototype.getProductMap = function (ID) {
-    return this._model.productMap.filter(function (m) { return m.productID == ID }).pop();
+    for (var i = 0; i < this._model.productMap.length; i++) {
+        var map = this._model.productMap[i];
+        if (map.productID === ID) return map;
+    }
+    return null;
 };
 
 xModelHandle.prototype.feedGPU = function () {
@@ -211,8 +215,8 @@ xModelHandle.prototype._bufferTexture = function (pointer, data, arity) {
     var size = 0;
     var maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     if (fp) {
-        //recompute to smaller size
-        size = Math.ceil(Math.sqrt(data.length / arity));
+        //recompute to smaller size, but make it +1 to make sure it is all right
+        size = Math.ceil(Math.sqrt(Math.ceil(data.length / arity))) + 1;
     }
     else {
         var dim = Math.sqrt(data.byteLength / 4);

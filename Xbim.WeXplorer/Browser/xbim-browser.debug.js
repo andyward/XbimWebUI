@@ -3,7 +3,7 @@
 * 
 * @name xBrowser
 * @constructor
-* @classdesc This is a reader of COBie data encoded in JSON format in COBieLight data structure. You can easily combine this with 3D viewer xViewer to get full
+* @classdesc This is a reader of COBie data encoded in JSON format in COBieLite data structure. You can easily combine this with 3D viewer xViewer to get full
 * user experience. This class is loosely coupled with jQuery UI. It is not a mandatory dependency for the rendering itself. Tree views are basically
 * nested unordered lists which is a natural representation for hierarchical data and lists are rendered as a table with one column. Classes are assigned
 * to different parts in a way that you can use to style in any way you want.
@@ -16,10 +16,10 @@
 * @param {string} [culture] - culture code. Default combination of language and culture is "en", "uk".
 */
 function xBrowser(lang, culture) {
-    this._data = null;
     this._model = new xVisualModel();
     this._events = [];
-    this._utils = new xCobieUtils(lang, culture);
+    this._lang = lang;
+    this._culture = culture;
     this._templates = {};
 
     //compile templates
@@ -531,29 +531,56 @@ xBrowser.prototype._getContainer = function (container) {
 };
 
 /**
-* Use this function to load data from JSON representation of COBieLight. Listen to {@link xBrowser#event:loaded loaded} event to start
+* Use this function to load data from JSON representation of COBieLite. Listen to {@link xBrowser#event:loaded loaded} event to start
 * using the browser.
 * @function xBrowser#load
-* @param {string} source - path to JSON data
+* @param {string|File|Blob} source - path to JSON data or File or Blob object to be used to load the data from
 * @fires xBrowser#loaded
 */
 xBrowser.prototype.load = function (source) {
     if (typeof (source) == 'undefined') throw 'You have to define a source to JSON data.';
     var self = this;
 
-    //use AJAX to load JSON data
+    //if it is a file, load its content
+    if (source instanceof Blob || source instanceof File) {
+        var fReader = new FileReader();
+        fReader.onloadend = function () {
+            if (fReader.result) {
+                //set data buffer for next processing
+                var data = JSON.parse(fReader.result);
+
+                //set right utils according to the data type
+                var uk = typeof (data.FacilityDefaultLinearUnit) === "undefined";
+                var utils = uk ? new xCobieUkUtils(self._lang, self._culture) : new xCobieUtils(self._lang, self._culture);
+
+                self._model = utils.getVisualModel(data);
+                self._fire('loaded', { model: self._model });
+            }
+        };
+        fReader.readAsText(source);
+        return;
+    }
+
+    //it should be a string now. Throw an exception if it isn't
+    if (typeof (source) !== 'string') throw "Unexpected type of source. It should be File, Blob of string URL";
+
+    //if it is a string than use ajax to load the data
     var xhr = new XMLHttpRequest();
     xhr.open('GET', source, true);
     xhr.onreadystatechange = function () {
         if (xhr.readyState == 4 && xhr.status == 200) {
-            self._data = xhr.response;
+            var data = xhr.response;
 
             //----- IE fix
-            if (typeof (self._data) == 'string')
-                self._data = JSON.parse(self._data);
+            if (typeof (data) == 'string')
+                data = JSON.parse(data);
             //------
 
-            self._model = self._utils.getVisualModel(self._data);
+            //decide about the version if utils
+            var uk = typeof (data.FacilityDefaultLinearUnit) === "undefined";
+            var utils = uk ? new xCobieUkUtils(self._lang, self._culture) : new xCobieUtils(self._lang, self._culture);
+
+            self._model = utils.getVisualModel(data);
 
             /**
             * Occurs when JSON data model is loaded
@@ -562,7 +589,7 @@ xBrowser.prototype.load = function (source) {
             * @param {xVisualModel} model - preprocessed {@link xVisualModel model} prepared for visual representation
             * @param {object} model - original COBie data
             */ 
-            self._fire('loaded', { model: self._model , data: self._data});
+            self._fire('loaded', { model: self._model});
         }
         //throw exception as a warning
         if (xhr.readyState == 4 && xhr.status != 200) {
@@ -605,7 +632,7 @@ xBrowser.prototype.onRemove = function (eventName, callback) {
     if (!callbacks) {
         return;
     }
-    var index = callbacks.indexOf(callback)
+    var index = callbacks.indexOf(callback);
     if (index >= 0) {
         callbacks.splice(index, 1);
     }
@@ -617,7 +644,7 @@ xBrowser.prototype._fire = function (eventName, args) {
     if (!handlers) {
         return;
     }
-    //cal the callbacks
+    //call the callbacks
     for (var i in handlers) {
         handlers[i](args);
     }

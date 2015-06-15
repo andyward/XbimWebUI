@@ -36,7 +36,8 @@ uniform int uStyleTextureSize;
 uniform highp sampler2D uStateStyleSampler;
 
 //colour to go to fragment shader
-varying vec4 vColor;
+varying vec4 vFrontColor;
+varying vec4 vBackColor;
 //varying position used for clipping in fragment shader
 varying vec3 vPosition;
 //state passed to fragment shader
@@ -54,12 +55,12 @@ vec3 getNormal(){
 	float U = aNormal[0];
 	float V = aNormal[1];
 	float PI = 3.1415926535897932384626433832795;
-	float u = ((U / 252.0) * (2.0 * PI)) - PI;
-	float v = ((V / 252.0) * (2.0 * PI)) - PI;
+	float lon = U / 252.0 * 2.0 * PI;
+	float lat = V / 252.0 * PI;
 	
-	float x = sin(v) * cos(u);
-	float y = sin(v) * sin(u);
-	float z = cos(v);
+	float x = sin(lon) * sin(lat);
+	float z = cos(lon) * sin(lat);
+	float y = cos(lat);
 	return normalize(vec3(x, y, z));
 }
 
@@ -125,6 +126,8 @@ void main(void) {
 	//transform data to simulate camera perspective and position
 	vec3 vertex = getVertexPosition();
 	vec3 normal = getNormal();
+	vec3 backNormal = normal * -1.0;
+
 	int state = int(floor(aState[0] + 0.5));
 	int restyle = int(floor(aState[1] + 0.5));
 	//HIDDEN state or first stage of xray rendering and no style state
@@ -133,29 +136,38 @@ void main(void) {
 		vDiscard = 1.0;
 		return;
 	}
+	else
+	{
+		vDiscard = 0.0;
+	}
 	
 	if (uColorCoding){
-		vColor = getIdColor();					
+		vec4 idColor = getIdColor();
+		vFrontColor = idColor;
+		vBackColor = idColor;
 	}
 	else{
 		//ulightA[3] represents intensity of the light
 		float lightAIntensity = ulightA[3];
-		vec3 lightADirection = normalize(ulightA.xyz - vPosition);
+		vec3 lightADirection = normalize(ulightA.xyz - vertex);
 		float lightBIntensity = ulightB[3];
-		vec3 lightBDirection = normalize(ulightB.xyz - vPosition);
+		vec3 lightBDirection = normalize(ulightB.xyz - vertex);
 		
 		//Light weighting
 		float lightWeightA = max(dot(normal, lightADirection ) * lightAIntensity, 0.0);
 		float lightWeightB = max(dot(normal, lightBDirection ) * lightBIntensity, 0.0);
+		float backLightWeightA = max(dot(backNormal, lightADirection) * lightAIntensity, 0.0);
+		float backLightWeightB = max(dot(backNormal, lightBDirection) * lightBIntensity, 0.0);
 		
 		//minimal constant value is for ambient light
 		float lightWeighting = lightWeightA + lightWeightB + 0.4;
+		float backLightWeighting = backLightWeightA + backLightWeightB + 0.4;
 		
 		//get base color or set highlighted colour
 		vec4 baseColor = state == 253 ? vec4(1.0, 0.68, 0.13, 1.0) : getColor();
 		
 		//offset semitransparent triangles
-		if (baseColor.a < 0.99 && uRenderingMode == 0)
+		if (baseColor.a < 0.98 && uRenderingMode == 0)
 		{
 			mat4 transpose = mat4(1);
 			vec3 trans = -0.002 * uMeter * normalize(normal);
@@ -165,7 +177,8 @@ void main(void) {
 		
 		//transform colour to simulate lighting
 		//preserve original alpha channel
-		vColor = vec4(baseColor.rgb * lightWeighting, baseColor.a);
+		vFrontColor = vec4(baseColor.rgb * lightWeighting, baseColor.a);
+		vBackColor = vec4(baseColor.rgb * backLightWeighting, baseColor.a);
 	}
 	vPosition = vertex;
 	gl_Position = uPMatrix * uMVMatrix * vec4(vertex, 1.0);
